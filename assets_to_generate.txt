@@ -1,22 +1,36 @@
-﻿ASSETS WEBP À AJOUTER PLUS TARD
+TOUS CES ASSETS SONT UTILISÉS PAR LA VERSION PRO
 
 assets/world/maps/map_forest_night_01.webp
-
+assets/world/props/tree_dead_01.webp
+assets/world/props/tree_dead_02.webp
+assets/world/props/rock_dark_01.webp
+assets/world/props/tombstone_01.webp
+assets/world/props/fence_broken_01.webp
+assets/world/props/ruin_wall_01.webp
+assets/world/props/lamp_post_01.webp
+assets/base/vampire_base_lvl_01.webp
+assets/base/vampire_base_lvl_02.webp
+assets/base/vampire_base_lvl_03.webp
 assets/player/hunter_idle_01.webp
 assets/player/hunter_walk_down.webp
 assets/player/hunter_walk_up.webp
 assets/player/hunter_walk_side.webp
-
+assets/player/hunter_attack_01.webp
 assets/enemies/vampire_basic_walk.webp
+assets/enemies/vampire_basic_attack.webp
+assets/enemies/vampire_basic_death.webp
 assets/enemies/vampire_fast_walk.webp
 assets/enemies/vampire_tank_walk.webp
-
-assets/base/vampire_base_lvl_01.webp
-assets/base/vampire_base_lvl_02.webp
-assets/base/vampire_base_lvl_03.webp
-
 assets/towers/crossbow_tower_lvl_01.webp
 assets/towers/crossbow_tower_lvl_02.webp
-
+assets/towers/fire_tower_lvl_01.webp
+assets/towers/holy_tower_lvl_01.webp
 assets/fx/coin_drop_01.webp
+assets/fx/hit_slash_01.webp
+assets/fx/dark_smoke_01.webp
 assets/fx/projectile_arrow_01.webp
+assets/fx/projectile_fire_01.webp
+assets/ui/icon_coin.webp
+assets/ui/icon_build_tower.webp
+assets/ui/icon_upgrade_base.webp
+assets/ui/button_main.webp

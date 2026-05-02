@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   "use strict";
 
   const canvas = document.getElementById("gameCanvas");
@@ -7,7 +7,6 @@
   const coinsText = document.getElementById("coinsText");
   const baseText = document.getElementById("baseText");
   const endCard = document.getElementById("endCard");
-
   const buildTowerBtn = document.getElementById("buildTowerBtn");
   const upgradeBaseBtn = document.getElementById("upgradeBaseBtn");
   const waveBtn = document.getElementById("waveBtn");
@@ -15,69 +14,92 @@
   const continueBtn = document.getElementById("continueBtn");
 
   const DPR = Math.min(2, window.devicePixelRatio || 1);
-
-  const world = { w: 2600, h: 2600 };
-  const camera = { x: 0, y: 0 };
+  const world = { w: 3000, h: 3000 };
+  const camera = { x: 0, y: 0, shake: 0 };
 
   const player = {
     x: world.w / 2,
-    y: world.h / 2 + 180,
+    y: world.h / 2 + 210,
     r: 22,
-    speed: 4.2,
+    speed: 4.35,
     angle: -Math.PI / 2,
     direction: "down",
     anim: 0,
-    attackCooldown: 0
+    attackCooldown: 0,
+    attackAnim: 0,
+    moving: false
   };
 
-  const base = {
-    x: world.w / 2,
-    y: world.h / 2,
-    r: 86,
-    hp: 100,
-    maxHp: 100,
-    level: 1
-  };
+  const base = { x: world.w / 2, y: world.h / 2, r: 90, hp: 140, maxHp: 140, level: 1, pulse: 0 };
 
   let target = { x: player.x, y: player.y };
   let fingerDown = false;
-  let coins = 80;
+  let coins = 100;
   let wave = 1;
+  let time = 0;
 
   const images = {};
   const enemies = [];
+  const deathFx = [];
   const towers = [];
   const drops = [];
   const projectiles = [];
   const particles = [];
   const texts = [];
+  const slashes = [];
+
+  const propLayout = [
+    { key: "treeDead01", x: 710, y: 650, w: 130, h: 150 },
+    { key: "treeDead02", x: 2300, y: 690, w: 140, h: 165 },
+    { key: "treeDead01", x: 640, y: 2130, w: 130, h: 150 },
+    { key: "treeDead02", x: 2380, y: 2240, w: 140, h: 165 },
+    { key: "rockDark01", x: 1050, y: 900, w: 110, h: 82 },
+    { key: "rockDark01", x: 2120, y: 1900, w: 120, h: 88 },
+    { key: "tombstone01", x: 1150, y: 2210, w: 78, h: 95 },
+    { key: "tombstone01", x: 1980, y: 790, w: 78, h: 95 },
+    { key: "fenceBroken01", x: 875, y: 1580, w: 180, h: 85 },
+    { key: "fenceBroken01", x: 2170, y: 1420, w: 180, h: 85 },
+    { key: "ruinWall01", x: 1160, y: 1150, w: 175, h: 130 },
+    { key: "ruinWall01", x: 1910, y: 1830, w: 180, h: 135 },
+    { key: "lampPost01", x: 1280, y: 1320, w: 70, h: 130 },
+    { key: "lampPost01", x: 1720, y: 1660, w: 70, h: 130 }
+  ];
 
   function loadImage(key, src) {
     const img = new Image();
-    img.onload = function () { img.ready = true; };
-    img.onerror = function () { img.ready = false; };
+    img.onload = () => { img.ready = true; };
+    img.onerror = () => { img.ready = false; };
     img.src = src;
     images[key] = img;
   }
 
   function loadAssets() {
     const A = window.VAMPIRE_ASSETS;
-
     loadImage("map", A.map);
+    Object.keys(A.props).forEach(k => loadImage(k, A.props[k]));
     loadImage("playerIdle", A.player.idle);
     loadImage("playerDown", A.player.walkDown);
     loadImage("playerUp", A.player.walkUp);
     loadImage("playerSide", A.player.walkSide);
-    loadImage("vampireBasic", A.enemies.basic);
-    loadImage("vampireFast", A.enemies.fast);
-    loadImage("vampireTank", A.enemies.tank);
+    loadImage("playerAttack", A.player.attack);
+    loadImage("vampireBasicWalk", A.enemies.basicWalk);
+    loadImage("vampireBasicAttack", A.enemies.basicAttack);
+    loadImage("vampireBasicDeath", A.enemies.basicDeath);
+    loadImage("vampireFastWalk", A.enemies.fastWalk);
+    loadImage("vampireTankWalk", A.enemies.tankWalk);
     loadImage("base1", A.base.level01);
     loadImage("base2", A.base.level02);
     loadImage("base3", A.base.level03);
-    loadImage("tower1", A.towers.crossbow01);
-    loadImage("tower2", A.towers.crossbow02);
+    loadImage("towerCrossbow1", A.towers.crossbow01);
+    loadImage("towerCrossbow2", A.towers.crossbow02);
+    loadImage("towerFire1", A.towers.fire01);
+    loadImage("towerHoly1", A.towers.holy01);
     loadImage("coin", A.fx.coin);
+    loadImage("hitSlash", A.fx.hitSlash);
+    loadImage("darkSmoke", A.fx.darkSmoke);
     loadImage("arrow", A.fx.arrow);
+    loadImage("fireball", A.fx.fireball);
+    loadImage("buttonMain", A.ui.buttonMain);
   }
 
   function resize() {
@@ -88,196 +110,120 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
-  function clamp(v, min, max) {
-    return Math.max(min, Math.min(max, v));
-  }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
   function screenToWorld(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: clientX - rect.left + camera.x,
-      y: clientY - rect.top + camera.y
-    };
+    return { x: clientX - rect.left + camera.x, y: clientY - rect.top + camera.y };
   }
 
   function updateHUD() {
     coinsText.textContent = coins;
-    const p = Math.max(0, Math.round((base.hp / base.maxHp) * 100));
-    baseText.textContent = "Base " + p + "%";
+    baseText.textContent = "Base " + Math.max(0, Math.round((base.hp / base.maxHp) * 100)) + "%";
   }
 
-  function addText(x, y, value) {
-    texts.push({ x, y, value, life: 60 });
-  }
+  function addText(x, y, value, color = "#fff") { texts.push({ x, y, value, color, life: 62 }); }
 
-  function addParticles(x, y, amount, color) {
+  function addParticles(x, y, amount, color, smoke) {
     for (let i = 0; i < amount; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = Math.random() * 2.5 + 0.6;
-      particles.push({
-        x,
-        y,
-        vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s,
-        color,
-        life: 28 + Math.random() * 18
-      });
+      const s = Math.random() * 2.8 + 0.45;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, color, smoke: !!smoke, size: smoke ? 24 + Math.random() * 20 : 3 + Math.random() * 2, life: 26 + Math.random() * 24 });
     }
   }
 
   function spawnEnemy() {
     const side = Math.floor(Math.random() * 4);
-    let x = 0;
-    let y = 0;
-
-    if (side === 0) { x = Math.random() * world.w; y = -90; }
-    if (side === 1) { x = world.w + 90; y = Math.random() * world.h; }
-    if (side === 2) { x = Math.random() * world.w; y = world.h + 90; }
-    if (side === 3) { x = -90; y = Math.random() * world.h; }
+    let x = 0, y = 0;
+    if (side === 0) { x = Math.random() * world.w; y = -110; }
+    if (side === 1) { x = world.w + 110; y = Math.random() * world.h; }
+    if (side === 2) { x = Math.random() * world.w; y = world.h + 110; }
+    if (side === 3) { x = -110; y = Math.random() * world.h; }
 
     const roll = Math.random();
     const kind = roll < 0.18 ? "tank" : roll > 0.72 ? "fast" : "basic";
-    const hp = kind === "tank" ? 80 + wave * 8 : kind === "fast" ? 32 + wave * 5 : 48 + wave * 6;
-
-    enemies.push({
-      x,
-      y,
-      r: kind === "tank" ? 25 : kind === "fast" ? 16 : 20,
-      hp,
-      maxHp: hp,
-      speed: kind === "tank" ? 0.75 : kind === "fast" ? 1.55 : 1.05,
-      dmg: kind === "tank" ? 0.32 : kind === "fast" ? 0.17 : 0.22,
-      kind,
-      anim: Math.random() * 10,
-      hit: 0
-    });
+    const hp = kind === "tank" ? 92 + wave * 9 : kind === "fast" ? 34 + wave * 5 : 52 + wave * 6;
+    enemies.push({ x, y, r: kind === "tank" ? 27 : kind === "fast" ? 17 : 21, hp, maxHp: hp, speed: kind === "tank" ? .78 : kind === "fast" ? 1.72 : 1.12, dmg: kind === "tank" ? .34 : kind === "fast" ? .18 : .24, kind, anim: Math.random() * 10, hit: 0, attacking: 0, slow: 0 });
   }
 
   function spawnWave() {
-    addText(base.x, base.y - 130, "Vague " + wave);
-
-    for (let i = 0; i < 10 + wave * 2; i++) {
-      setTimeout(spawnEnemy, i * 120);
-    }
-
+    addText(base.x, base.y - 135, "Vague " + wave, "#ffd84b");
+    for (let i = 0; i < 10 + wave * 2; i++) setTimeout(spawnEnemy, i * 105);
     wave++;
   }
 
   function killEnemy(enemy, index) {
-    const value = enemy.kind === "tank" ? 18 : enemy.kind === "fast" ? 9 : 12;
-
-    drops.push({
-      x: enemy.x,
-      y: enemy.y,
-      r: 10,
-      value,
-      life: 600,
-      magnet: false
-    });
-
-    addParticles(enemy.x, enemy.y, 12, "#9c55ff");
-    addText(enemy.x, enemy.y - 20, "+" + value);
+    const value = enemy.kind === "tank" ? 20 : enemy.kind === "fast" ? 10 : 13;
+    deathFx.push({ x: enemy.x, y: enemy.y, kind: enemy.kind, anim: 0, life: 26 });
+    drops.push({ x: enemy.x, y: enemy.y, r: 10, value, life: 640, magnet: false, anim: Math.random() * 6 });
+    addParticles(enemy.x, enemy.y, 13, "#9c55ff", true);
+    addText(enemy.x, enemy.y - 24, "+" + value, "#ffd84b");
+    camera.shake = Math.max(camera.shake, 5);
     enemies.splice(index, 1);
   }
 
   function tryBuildTower() {
-    if (coins < 50) {
-      addText(player.x, player.y - 45, "Pas assez");
-      return;
-    }
+    if (coins < 50) { addText(player.x, player.y - 45, "Pas assez", "#ff7084"); return; }
+    if (Math.hypot(player.x - base.x, player.y - base.y) < 140) { addText(player.x, player.y - 45, "Trop près", "#ff7084"); return; }
+    for (const t of towers) if (Math.hypot(t.x - player.x, t.y - player.y) < 96) { addText(player.x, player.y - 45, "Déjà une tour", "#ff7084"); return; }
 
-    if (Math.hypot(player.x - base.x, player.y - base.y) < 135) {
-      addText(player.x, player.y - 45, "Trop près");
-      return;
-    }
-
-    for (const t of towers) {
-      if (Math.hypot(t.x - player.x, t.y - player.y) < 90) {
-        addText(player.x, player.y - 45, "Déjà une tour");
-        return;
-      }
-    }
-
+    const count = towers.length % 3;
+    const type = count === 0 ? "crossbow" : count === 1 ? "fire" : "holy";
     coins -= 50;
-
-    towers.push({
-      x: player.x,
-      y: player.y,
-      range: 260,
-      cooldown: 0,
-      dmg: 22,
-      level: 1
-    });
-
-    addParticles(player.x, player.y, 20, "#ffd84b");
-    addText(player.x, player.y - 45, "Tour !");
+    towers.push({ x: player.x, y: player.y, type, range: type === "holy" ? 230 : 275, cooldown: 0, dmg: type === "fire" ? 30 : type === "holy" ? 18 : 24, level: type === "crossbow" && towers.length > 2 ? 2 : 1, anim: 0 });
+    addParticles(player.x, player.y, 24, "#ffd84b", false);
+    addText(player.x, player.y - 48, type === "fire" ? "Tour feu" : type === "holy" ? "Tour sacrée" : "Arbalète", "#fff");
     updateHUD();
   }
 
   function upgradeBase() {
-    if (coins < 100) {
-      addText(base.x, base.y - 120, "Pas assez");
-      return;
-    }
-
+    if (coins < 100) { addText(base.x, base.y - 125, "Pas assez", "#ff7084"); return; }
     coins -= 100;
     base.level = Math.min(3, base.level + 1);
-    base.maxHp += 35;
+    base.maxHp += 45;
     base.hp = base.maxHp;
-    base.r += 7;
-
-    addParticles(base.x, base.y, 28, "#ffd84b");
-    addText(base.x, base.y - 120, "Base niv. " + base.level);
+    base.r += 8;
+    camera.shake = 7;
+    addParticles(base.x, base.y, 34, "#ffd84b", false);
+    addText(base.x, base.y - 130, "Base niv. " + base.level, "#ffd84b");
     updateHUD();
   }
 
   function updatePlayer() {
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
+    const dx = target.x - player.x, dy = target.y - player.y;
     const d = Math.hypot(dx, dy);
-
-    if (d > 8) {
-      const nx = dx / d;
-      const ny = dy / d;
-
-      player.x = clamp(player.x + nx * player.speed, 70, world.w - 70);
-      player.y = clamp(player.y + ny * player.speed, 70, world.h - 70);
+    player.moving = d > 8;
+    if (player.moving) {
+      const nx = dx / d, ny = dy / d;
+      player.x = clamp(player.x + nx * player.speed, 80, world.w - 80);
+      player.y = clamp(player.y + ny * player.speed, 80, world.h - 80);
       player.angle = Math.atan2(ny, nx);
-      player.anim += 0.22;
-
-      if (Math.abs(nx) > Math.abs(ny)) {
-        player.direction = nx > 0 ? "right" : "left";
-      } else {
-        player.direction = ny > 0 ? "down" : "up";
-      }
+      player.anim += .25;
+      if (Math.abs(nx) > Math.abs(ny)) player.direction = nx > 0 ? "right" : "left";
+      else player.direction = ny > 0 ? "down" : "up";
+    } else {
+      player.anim += .055;
     }
 
     player.attackCooldown = Math.max(0, player.attackCooldown - 1);
-
+    player.attackAnim = Math.max(0, player.attackAnim - 1);
     if (player.attackCooldown <= 0) {
-      let bestIndex = -1;
-      let bestDistance = 95;
-
+      let bestIndex = -1, bestD = 100;
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i];
-        const dist = Math.hypot(e.x - player.x, e.y - player.y);
-
-        if (dist < bestDistance) {
-          bestDistance = dist;
-          bestIndex = i;
-        }
+        const dd = Math.hypot(e.x - player.x, e.y - player.y);
+        if (dd < bestD) { bestD = dd; bestIndex = i; }
       }
-
       if (bestIndex >= 0) {
         const e = enemies[bestIndex];
-        e.hp -= 24;
+        e.hp -= 25;
         e.hit = 8;
-        addParticles(e.x, e.y, 5, "#ff4a64");
-        player.attackCooldown = 20;
-
-        if (e.hp <= 0) {
-          killEnemy(e, bestIndex);
-        }
+        player.attackCooldown = 19;
+        player.attackAnim = 12;
+        slashes.push({ x: e.x, y: e.y, angle: player.angle, life: 13 });
+        addParticles(e.x, e.y, 6, "#ff4a64", false);
+        if (e.hp <= 0) killEnemy(e, bestIndex);
       }
     }
   }
@@ -285,65 +231,46 @@
   function updateEnemies() {
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
-
-      e.anim += 0.1;
+      e.anim += .11;
       e.hit = Math.max(0, e.hit - 1);
-
-      const dxPlayer = player.x - e.x;
-      const dyPlayer = player.y - e.y;
-      const distPlayer = Math.hypot(dxPlayer, dyPlayer);
-
-      const targetObj = distPlayer < 220 ? player : base;
-      const dx = targetObj.x - e.x;
-      const dy = targetObj.y - e.y;
+      e.slow = Math.max(0, e.slow - 1);
+      const targetObj = dist(e, player) < 225 ? player : base;
+      const dx = targetObj.x - e.x, dy = targetObj.y - e.y;
       const d = Math.hypot(dx, dy);
-
       const stop = targetObj === base ? base.r + e.r - 8 : player.r + e.r + 2;
-
       if (d > stop) {
-        e.x += (dx / d) * e.speed;
-        e.y += (dy / d) * e.speed;
-      } else if (targetObj === base) {
-        base.hp -= e.dmg;
+        const slowFactor = e.slow > 0 ? .55 : 1;
+        e.x += (dx / d) * e.speed * slowFactor;
+        e.y += (dy / d) * e.speed * slowFactor;
+        e.attacking = 0;
+      } else {
+        e.attacking = 1;
+        if (targetObj === base) {
+          base.hp -= e.dmg;
+          base.pulse = 12;
+          if (Math.random() < .08) addParticles(base.x + (Math.random() - .5) * base.r, base.y + (Math.random() - .5) * base.r, 1, "#ff4a64", false);
+        }
       }
-
-      if (base.hp <= 0) {
-        base.hp = 0;
-        showEndCard();
-      }
+      if (base.hp <= 0) { base.hp = 0; showEndCard(); }
     }
   }
 
   function updateTowers() {
     for (const t of towers) {
+      t.anim += .08;
       t.cooldown = Math.max(0, t.cooldown - 1);
-
-      if (t.cooldown > 0) {
-        continue;
-      }
-
-      let best = null;
-      let bestDistance = t.range;
-
+      if (t.cooldown > 0) continue;
+      let best = null, bestD = t.range;
       for (const e of enemies) {
         const d = Math.hypot(e.x - t.x, e.y - t.y);
-
-        if (d < bestDistance) {
-          best = e;
-          bestDistance = d;
-        }
+        if (d < bestD) { best = e; bestD = d; }
       }
-
       if (best) {
-        projectiles.push({
-          x: t.x,
-          y: t.y - 20,
-          target: best,
-          speed: 9,
-          dmg: t.dmg
-        });
-
-        t.cooldown = 42;
+        const fire = t.type === "fire";
+        const holy = t.type === "holy";
+        projectiles.push({ x: t.x, y: t.y - 24, target: best, speed: fire ? 7.5 : 9.5, dmg: t.dmg, type: t.type, life: 120 });
+        if (holy) best.slow = 60;
+        t.cooldown = fire ? 55 : holy ? 68 : 38;
       }
     }
   }
@@ -351,27 +278,17 @@
   function updateProjectiles() {
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
-
-      if (!enemies.includes(p.target)) {
-        projectiles.splice(i, 1);
-        continue;
-      }
-
-      const dx = p.target.x - p.x;
-      const dy = p.target.y - p.y;
+      p.life--;
+      if (!enemies.includes(p.target) || p.life <= 0) { projectiles.splice(i, 1); continue; }
+      const dx = p.target.x - p.x, dy = p.target.y - p.y;
       const d = Math.hypot(dx, dy);
-
-      if (d < 12) {
+      if (d < 14) {
         const e = p.target;
         e.hp -= p.dmg;
         e.hit = 8;
-        addParticles(e.x, e.y, 7, "#ff4a64");
-
+        addParticles(e.x, e.y, p.type === "fire" ? 14 : 8, p.type === "fire" ? "#ff9a2e" : "#ff4a64", p.type === "fire");
         const idx = enemies.indexOf(e);
-        if (e.hp <= 0 && idx >= 0) {
-          killEnemy(e, idx);
-        }
-
+        if (e.hp <= 0 && idx >= 0) killEnemy(e, idx);
         projectiles.splice(i, 1);
       } else {
         p.x += (dx / d) * p.speed;
@@ -383,510 +300,206 @@
   function updateDrops() {
     for (let i = drops.length - 1; i >= 0; i--) {
       const c = drops[i];
-
-      c.life--;
-
+      c.life--; c.anim += .12;
       const d = Math.hypot(c.x - player.x, c.y - player.y);
-
-      if (d < 150) {
-        c.magnet = true;
-      }
-
-      if (c.magnet) {
-        c.x += (player.x - c.x) * 0.08;
-        c.y += (player.y - c.y) * 0.08;
-      }
-
+      if (d < 150) c.magnet = true;
+      if (c.magnet) { c.x += (player.x - c.x) * .09; c.y += (player.y - c.y) * .09; }
       if (d < player.r + 16) {
         coins += c.value;
-        addParticles(c.x, c.y, 9, "#ffd84b");
+        addParticles(c.x, c.y, 10, "#ffd84b", false);
         drops.splice(i, 1);
         updateHUD();
-      } else if (c.life <= 0) {
-        drops.splice(i, 1);
-      }
+      } else if (c.life <= 0) drops.splice(i, 1);
     }
   }
 
-  function updateParticles() {
+  function updateFx() {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.94;
-      p.vy *= 0.94;
-      p.life--;
-
-      if (p.life <= 0) {
-        particles.splice(i, 1);
-      }
+      p.x += p.vx; p.y += p.vy; p.vx *= .94; p.vy *= .94; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
     }
-  }
-
-  function updateTexts() {
-    for (let i = texts.length - 1; i >= 0; i--) {
-      const t = texts[i];
-
-      t.y -= 0.5;
-      t.life--;
-
-      if (t.life <= 0) {
-        texts.splice(i, 1);
-      }
-    }
+    for (let i = texts.length - 1; i >= 0; i--) { const t = texts[i]; t.y -= .55; t.life--; if (t.life <= 0) texts.splice(i, 1); }
+    for (let i = slashes.length - 1; i >= 0; i--) { slashes[i].life--; if (slashes[i].life <= 0) slashes.splice(i, 1); }
+    for (let i = deathFx.length - 1; i >= 0; i--) { deathFx[i].anim += .22; deathFx[i].life--; if (deathFx[i].life <= 0) deathFx.splice(i, 1); }
+    base.pulse = Math.max(0, base.pulse - 1);
+    camera.shake *= .88;
   }
 
   function updateCamera() {
-    const sw = window.innerWidth;
-    const sh = window.innerHeight;
-
-    const tx = clamp(player.x - sw / 2, 0, world.w - sw);
-    const ty = clamp(player.y - sh / 2, 0, world.h - sh);
-
-    camera.x += (tx - camera.x) * 0.09;
-    camera.y += (ty - camera.y) * 0.09;
+    const sw = window.innerWidth, sh = window.innerHeight;
+    const lookAhead = player.moving ? 45 : 0;
+    const tx = clamp(player.x + Math.cos(player.angle) * lookAhead - sw / 2, 0, world.w - sw);
+    const ty = clamp(player.y + Math.sin(player.angle) * lookAhead - sh / 2, 0, world.h - sh);
+    camera.x += (tx - camera.x) * .085;
+    camera.y += (ty - camera.y) * .085;
   }
 
-  function drawImageCentered(img, x, y, w, h, flipX) {
-    if (!img || !img.ready) {
-      return false;
-    }
-
-    ctx.save();
-    ctx.translate(x, y);
-
-    if (flipX) {
-      ctx.scale(-1, 1);
-    }
-
+  function drawImageCentered(img, x, y, w, h, flipX, alpha = 1, rotation = 0) {
+    if (!img || !img.ready) return false;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.rotate(rotation); if (flipX) ctx.scale(-1, 1);
     ctx.drawImage(img, -w / 2, -h / 2, w, h);
-    ctx.restore();
-
-    return true;
+    ctx.restore(); return true;
   }
 
-  function drawSprite(img, x, y, w, h, frame, count, flipX) {
-    if (!img || !img.ready || !img.naturalWidth || !img.naturalHeight) {
-      return false;
-    }
-
-    const sw = img.naturalWidth / count;
-    const sh = img.naturalHeight;
-    const sx = Math.floor(frame % count) * sw;
-
-    ctx.save();
-    ctx.translate(x, y);
-
-    if (flipX) {
-      ctx.scale(-1, 1);
-    }
-
+  function drawSprite(img, x, y, w, h, frame, count, flipX, alpha = 1) {
+    if (!img || !img.ready || !img.naturalWidth || !img.naturalHeight) return false;
+    const sw = img.naturalWidth / count, sh = img.naturalHeight, sx = Math.floor(frame % count) * sw;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); if (flipX) ctx.scale(-1, 1);
     ctx.drawImage(img, sx, 0, sw, sh, -w / 2, -h / 2, w, h);
-    ctx.restore();
-
-    return true;
+    ctx.restore(); return true;
   }
+
+  function beginWorld() {
+    const s = camera.shake;
+    const sx = s ? (Math.random() - .5) * s : 0;
+    const sy = s ? (Math.random() - .5) * s : 0;
+    ctx.save(); ctx.translate(sx, sy);
+  }
+  function endWorld() { ctx.restore(); }
 
   function drawBackground() {
-    if (images.map && images.map.ready) {
-      ctx.drawImage(images.map, -camera.x, -camera.y, world.w, world.h);
-    } else {
-      ctx.save();
-      ctx.translate(-camera.x, -camera.y);
+    if (images.map && images.map.ready) ctx.drawImage(images.map, -camera.x, -camera.y, world.w, world.h);
+    else drawFallbackMap();
 
-      ctx.fillStyle = "#141326";
-      ctx.fillRect(0, 0, world.w, world.h);
-
-      const grid = 120;
-
-      for (let x = 0; x < world.w; x += grid) {
-        for (let y = 0; y < world.h; y += grid) {
-          ctx.fillStyle = ((x / grid + y / grid) % 2 === 0) ? "#1d1b31" : "#17192b";
-          ctx.fillRect(x, y, grid, grid);
-        }
-      }
-
-      ctx.strokeStyle = "rgba(139, 104, 78, 0.45)";
-      ctx.lineWidth = 72;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(base.x - 680, base.y - 520);
-      ctx.quadraticCurveTo(base.x - 200, base.y - 180, base.x, base.y);
-      ctx.quadraticCurveTo(base.x + 340, base.y + 230, base.x + 660, base.y + 560);
-      ctx.stroke();
-
-      ctx.strokeStyle = "rgba(106, 79, 68, 0.42)";
-      ctx.lineWidth = 46;
-      ctx.beginPath();
-      ctx.moveTo(base.x + 640, base.y - 520);
-      ctx.quadraticCurveTo(base.x + 240, base.y - 120, base.x, base.y);
-      ctx.quadraticCurveTo(base.x - 250, base.y + 100, base.x - 630, base.y + 480);
-      ctx.stroke();
-
-      drawFakeProps();
-
-      ctx.restore();
-    }
-
-    const sw = window.innerWidth;
-    const sh = window.innerHeight;
-    const g = ctx.createRadialGradient(sw / 2, sh / 2, 100, sw / 2, sh / 2, Math.max(sw, sh) * 0.75);
-    g.addColorStop(0, "rgba(255,255,255,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.54)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, sw, sh);
+    const sw = window.innerWidth, sh = window.innerHeight;
+    const g = ctx.createRadialGradient(sw / 2, sh / 2, 90, sw / 2, sh / 2, Math.max(sw, sh) * .75);
+    g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(1, "rgba(0,0,0,.55)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, sw, sh);
   }
 
-  function drawFakeProps() {
-    const props = [
-      [base.x - 520, base.y - 300],
-      [base.x - 620, base.y + 190],
-      [base.x + 420, base.y - 320],
-      [base.x + 570, base.y + 220],
-      [base.x - 760, base.y - 620],
-      [base.x + 790, base.y + 640],
-      [base.x - 280, base.y + 440],
-      [base.x + 260, base.y + 420],
-      [base.x + 290, base.y - 240],
-      [base.x - 390, base.y + 140]
-    ];
+  function drawFallbackMap() {
+    ctx.save(); ctx.translate(-camera.x, -camera.y);
+    ctx.fillStyle = "#141326"; ctx.fillRect(0, 0, world.w, world.h);
+    const grid = 120;
+    for (let x = 0; x < world.w; x += grid) for (let y = 0; y < world.h; y += grid) { ctx.fillStyle = ((x / grid + y / grid) % 2 === 0) ? "#1d1b31" : "#17192b"; ctx.fillRect(x, y, grid, grid); }
+    ctx.strokeStyle = "rgba(139,104,78,.45)"; ctx.lineWidth = 72; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(base.x - 790, base.y - 620); ctx.quadraticCurveTo(base.x - 240, base.y - 210, base.x, base.y); ctx.quadraticCurveTo(base.x + 390, base.y + 260, base.x + 790, base.y + 650); ctx.stroke();
+    ctx.restore();
+  }
 
-    for (let i = 0; i < props.length; i++) {
-      const x = props[i][0];
-      const y = props[i][1];
-
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
-      ctx.beginPath();
-      ctx.ellipse(x + 6, y + 42, 36, 11, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (i < 6) {
-        ctx.fillStyle = "#342315";
-        ctx.fillRect(x - 7, y, 14, 54);
-
-        ctx.fillStyle = "#263c30";
-        ctx.beginPath();
-        ctx.arc(x, y - 10, 36, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (i < 8) {
-        ctx.fillStyle = "#545566";
-        ctx.beginPath();
-        ctx.moveTo(x - 30, y + 20);
-        ctx.lineTo(x - 10, y - 18);
-        ctx.lineTo(x + 32, y - 14);
-        ctx.lineTo(x + 48, y + 18);
-        ctx.lineTo(x + 20, y + 34);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.fillStyle = "#4a4654";
-        ctx.fillRect(x - 48, y - 34, 34, 80);
-        ctx.fillRect(x + 8, y - 18, 48, 64);
-      }
+  function drawProps() {
+    for (const p of propLayout) {
+      const ok = drawImageCentered(images[p.key], p.x - camera.x, p.y - camera.y, p.w, p.h, false);
+      if (!ok) drawFallbackProp(p);
     }
+  }
+
+  function drawFallbackProp(p) {
+    const x = p.x - camera.x, y = p.y - camera.y;
+    ctx.save(); ctx.translate(x, y);
+    if (p.key.includes("tree")) { ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(6, 46, 38, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = "#342315"; ctx.fillRect(-7, 0, 14, 58); ctx.fillStyle = "#263c30"; ctx.beginPath(); ctx.arc(0, -12, 38, 0, Math.PI*2); ctx.fill(); }
+    else if (p.key.includes("rock")) { ctx.fillStyle = "#56586a"; ctx.beginPath(); ctx.moveTo(-35,22); ctx.lineTo(-10,-18); ctx.lineTo(34,-15); ctx.lineTo(50,18); ctx.lineTo(20,35); ctx.closePath(); ctx.fill(); }
+    else { ctx.fillStyle = "#524b5c"; ctx.beginPath(); ctx.roundRect(-35, -35, 70, 70, 9); ctx.fill(); }
+    ctx.restore();
   }
 
   function drawBase() {
-    const x = base.x - camera.x;
-    const y = base.y - camera.y;
-
+    const x = base.x - camera.x, y = base.y - camera.y;
     const img = base.level >= 3 ? images.base3 : base.level >= 2 ? images.base2 : images.base1;
-
-    if (!drawImageCentered(img, x, y, base.r * 2.2, base.r * 1.9, false)) {
-      ctx.save();
-      ctx.translate(x, y);
-
-      ctx.fillStyle = "rgba(0,0,0,0.38)";
-      ctx.beginPath();
-      ctx.ellipse(0, 45, base.r * 1.2, base.r * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const g = ctx.createRadialGradient(-20, -30, 20, 0, 0, base.r * 1.1);
-      g.addColorStop(0, "#bd63ff");
-      g.addColorStop(0.55, "#5c2382");
-      g.addColorStop(1, "#25142f");
-
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.roundRect(-base.r * 0.9, -base.r * 0.65, base.r * 1.8, base.r * 1.3, 26);
-      ctx.fill();
-
-      ctx.fillStyle = "#1c1024";
-      ctx.fillRect(-base.r * 0.25, -base.r * 0.08, base.r * 0.5, base.r * 0.72);
-
-      ctx.restore();
+    const scale = 1 + base.pulse * .006 + Math.sin(time * .035) * .008;
+    if (!drawImageCentered(img, x, y, base.r * 2.25 * scale, base.r * 1.95 * scale, false)) {
+      ctx.save(); ctx.translate(x, y); ctx.fillStyle = "rgba(0,0,0,.38)"; ctx.beginPath(); ctx.ellipse(0, 47, base.r*1.2, base.r*.42, 0, 0, Math.PI*2); ctx.fill(); const g = ctx.createRadialGradient(-20,-30,20,0,0,base.r*1.1); g.addColorStop(0,"#bd63ff"); g.addColorStop(.55,"#5c2382"); g.addColorStop(1,"#25142f"); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-base.r*.9,-base.r*.65,base.r*1.8,base.r*1.3,26); ctx.fill(); ctx.restore();
     }
-
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.font = "900 14px Arial";
-    ctx.strokeStyle = "rgba(0,0,0,0.65)";
-    ctx.fillStyle = "#ffffff";
-    ctx.lineWidth = 4;
-    ctx.strokeText("BASE " + base.level, x, y - base.r - 14);
-    ctx.fillText("BASE " + base.level, x, y - base.r - 14);
-    ctx.restore();
+    ctx.save(); ctx.textAlign = "center"; ctx.font = "900 14px Arial"; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.fillStyle = "#fff"; ctx.lineWidth = 4; ctx.strokeText("BASE " + base.level, x, y - base.r - 16); ctx.fillText("BASE " + base.level, x, y - base.r - 16); ctx.restore();
   }
 
   function drawPlayer() {
-    const x = player.x - camera.x;
-    const y = player.y - camera.y;
+    const x = player.x - camera.x, y = player.y - camera.y;
     const frame = Math.floor(player.anim) % 4;
-
-    let img = images.playerDown;
-    let flip = false;
-
-    if (player.direction === "up") img = images.playerUp;
-    if (player.direction === "right") img = images.playerSide;
-    if (player.direction === "left") {
-      img = images.playerSide;
-      flip = true;
+    let img = images.playerDown, flip = false;
+    if (!player.moving && images.playerIdle && images.playerIdle.ready) {
+      if (drawImageCentered(images.playerIdle, x, y, 70, 82, player.direction === "left")) return;
     }
+    if (player.attackAnim > 0 && images.playerAttack && images.playerAttack.ready) img = images.playerAttack;
+    else if (player.direction === "up") img = images.playerUp;
+    else if (player.direction === "left") { img = images.playerSide; flip = true; }
+    else if (player.direction === "right") img = images.playerSide;
+    if (drawSprite(img, x, y, 72, 84, frame, 4, flip)) return;
+    drawFallbackPlayer(x, y);
+  }
 
-    if (drawSprite(img, x, y, 70, 82, frame, 4, flip)) {
-      return;
-    }
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(player.angle + Math.PI / 2);
-
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.beginPath();
-    ctx.ellipse(0, 20, 24, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#27324d";
-    ctx.beginPath();
-    ctx.roundRect(-13, -8, 26, 33, 10);
-    ctx.fill();
-
-    ctx.fillStyle = "#d9c0a0";
-    ctx.beginPath();
-    ctx.arc(0, -21, 13, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#181924";
-    ctx.beginPath();
-    ctx.arc(0, -26, 14, Math.PI, 0);
-    ctx.fill();
-
-    ctx.strokeStyle = "#e2e7f4";
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(12, -1);
-    ctx.lineTo(28, -17);
-    ctx.stroke();
-
-    ctx.restore();
+  function drawFallbackPlayer(x, y) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(player.angle + Math.PI/2); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(0,20,24,9,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = "#27324d"; ctx.beginPath(); ctx.roundRect(-13,-8,26,33,10); ctx.fill(); ctx.fillStyle = "#d9c0a0"; ctx.beginPath(); ctx.arc(0,-21,13,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "#e2e7f4"; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(12,-1); ctx.lineTo(28,-17); ctx.stroke(); ctx.restore();
   }
 
   function drawEnemy(e) {
-    const x = e.x - camera.x;
-    const y = e.y - camera.y;
+    const x = e.x - camera.x, y = e.y - camera.y;
     const frame = Math.floor(e.anim * 3) % 4;
+    let img = e.kind === "fast" ? images.vampireFastWalk : e.kind === "tank" ? images.vampireTankWalk : (e.attacking && images.vampireBasicAttack.ready ? images.vampireBasicAttack : images.vampireBasicWalk);
+    let w = e.kind === "tank" ? 78 : e.kind === "fast" ? 54 : 60;
+    let h = e.kind === "tank" ? 90 : e.kind === "fast" ? 68 : 72;
+    const bob = Math.sin(e.anim * 4) * 2;
+    if (!drawSprite(img, x, y + bob, w, h, frame, 4, false, e.hit > 0 ? .72 : 1)) drawFallbackEnemy(e, x, y);
+    const hpW = e.r * 2.2; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x - hpW/2, y - e.r - 20, hpW, 4); ctx.fillStyle = "#ff4a64"; ctx.fillRect(x - hpW/2, y - e.r - 20, hpW * Math.max(0, e.hp/e.maxHp), 4);
+  }
 
-    let img = images.vampireBasic;
-    let w = 58;
-    let h = 70;
-
-    if (e.kind === "fast") {
-      img = images.vampireFast;
-      w = 52;
-      h = 66;
-    }
-
-    if (e.kind === "tank") {
-      img = images.vampireTank;
-      w = 76;
-      h = 88;
-    }
-
-    if (!drawSprite(img, x, y, w, h, frame, 4, false)) {
-      const color = e.kind === "tank" ? "#842442" : e.kind === "fast" ? "#d73c66" : "#9a2e56";
-
-      ctx.save();
-      ctx.translate(x, y);
-
-      ctx.fillStyle = "rgba(0,0,0,0.32)";
-      ctx.beginPath();
-      ctx.ellipse(0, e.r + 7, e.r * 1.05, e.r * 0.34, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = e.hit > 0 ? "#ffffff" : color;
-      ctx.beginPath();
-      ctx.arc(0, 0, e.r + Math.sin(e.anim * 5) * 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#f5eaf0";
-      ctx.beginPath();
-      ctx.arc(-e.r * 0.28, -e.r * 0.12, 3, 0, Math.PI * 2);
-      ctx.arc(e.r * 0.28, -e.r * 0.12, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    }
-
-    const hpW = e.r * 2;
-
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(x - hpW / 2, y - e.r - 18, hpW, 4);
-
-    ctx.fillStyle = "#ff4a64";
-    ctx.fillRect(x - hpW / 2, y - e.r - 18, hpW * Math.max(0, e.hp / e.maxHp), 4);
+  function drawFallbackEnemy(e, x, y) {
+    const color = e.kind === "tank" ? "#842442" : e.kind === "fast" ? "#d73c66" : "#9a2e56";
+    ctx.save(); ctx.translate(x,y); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(0,e.r+7,e.r*1.05,e.r*.34,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = e.hit > 0 ? "#fff" : color; ctx.beginPath(); ctx.arc(0,0,e.r + Math.sin(e.anim*5)*2,0,Math.PI*2); ctx.fill(); ctx.restore();
   }
 
   function drawTower(t) {
-    const x = t.x - camera.x;
-    const y = t.y - camera.y;
-
-    const img = t.level >= 2 ? images.tower2 : images.tower1;
-
-    if (!drawImageCentered(img, x, y, 78, 92, false)) {
-      ctx.save();
-      ctx.translate(x, y);
-
-      ctx.fillStyle = "rgba(0,0,0,0.34)";
-      ctx.beginPath();
-      ctx.ellipse(0, 25, 30, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#342b46";
-      ctx.beginPath();
-      ctx.roundRect(-20, -8, 40, 44, 8);
-      ctx.fill();
-
-      ctx.fillStyle = "#8364ff";
-      ctx.beginPath();
-      ctx.moveTo(0, -35);
-      ctx.lineTo(27, -4);
-      ctx.lineTo(-27, -4);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.restore();
+    const x = t.x - camera.x, y = t.y - camera.y;
+    const pulse = 1 + Math.sin(t.anim * 3) * .01;
+    let img = t.type === "fire" ? images.towerFire1 : t.type === "holy" ? images.towerHoly1 : (t.level >= 2 ? images.towerCrossbow2 : images.towerCrossbow1);
+    if (!drawImageCentered(img, x, y, 82 * pulse, 96 * pulse, false)) {
+      ctx.save(); ctx.translate(x,y); ctx.fillStyle = "#342b46"; ctx.beginPath(); ctx.roundRect(-20,-8,40,44,8); ctx.fill(); ctx.fillStyle = t.type === "fire" ? "#ff8f2c" : t.type === "holy" ? "#fff0a6" : "#8364ff"; ctx.beginPath(); ctx.moveTo(0,-35); ctx.lineTo(27,-4); ctx.lineTo(-27,-4); ctx.closePath(); ctx.fill(); ctx.restore();
     }
-
-    ctx.strokeStyle = "rgba(155,122,255,0.14)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, t.range, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeStyle = t.type === "fire" ? "rgba(255,140,50,.16)" : t.type === "holy" ? "rgba(255,245,170,.16)" : "rgba(155,122,255,.14)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, t.range, 0, Math.PI*2); ctx.stroke();
   }
 
   function drawDrop(c) {
-    const x = c.x - camera.x;
-    const y = c.y - camera.y;
-
-    if (drawImageCentered(images.coin, x, y, 26, 26, false)) {
-      return;
-    }
-
-    const g = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, c.r);
-    g.addColorStop(0, "#fff5b9");
-    g.addColorStop(0.45, "#ffd84b");
-    g.addColorStop(1, "#b46a11");
-
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, c.r, 0, Math.PI * 2);
-    ctx.fill();
+    const x = c.x - camera.x, y = c.y - camera.y + Math.sin(c.anim) * 3;
+    if (drawImageCentered(images.coin, x, y, 27, 27, false)) return;
+    const g = ctx.createRadialGradient(x-4,y-4,2,x,y,c.r); g.addColorStop(0,"#fff5b9"); g.addColorStop(.45,"#ffd84b"); g.addColorStop(1,"#b46a11"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x,y,c.r,0,Math.PI*2); ctx.fill();
   }
 
   function drawProjectile(p) {
-    const x = p.x - camera.x;
-    const y = p.y - camera.y;
-
-    if (drawImageCentered(images.arrow, x, y, 30, 12, false)) {
-      return;
-    }
-
-    ctx.strokeStyle = "#e7d6ff";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - 10, y + 10);
-    ctx.stroke();
+    const x = p.x - camera.x, y = p.y - camera.y;
+    const angle = Math.atan2(p.target.y - p.y, p.target.x - p.x);
+    const img = p.type === "fire" ? images.fireball : images.arrow;
+    if (drawImageCentered(img, x, y, p.type === "fire" ? 32 : 34, p.type === "fire" ? 32 : 13, false, 1, angle)) return;
+    ctx.save(); ctx.translate(x,y); ctx.rotate(angle); ctx.strokeStyle = p.type === "fire" ? "#ff9a2e" : "#e7d6ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke(); ctx.restore();
   }
 
-  function drawParticles() {
+  function drawFx() {
+    for (const d of deathFx) {
+      const x = d.x - camera.x, y = d.y - camera.y;
+      const frame = Math.floor(d.anim) % 4;
+      if (!drawSprite(images.vampireBasicDeath, x, y, 68, 78, frame, 4, false, Math.max(0, d.life/26))) drawImageCentered(images.darkSmoke, x, y, 65, 65, false, Math.max(0, d.life/26));
+    }
+    for (const s of slashes) drawImageCentered(images.hitSlash, s.x - camera.x, s.y - camera.y, 70, 70, false, Math.max(0, s.life/13), s.angle);
     for (const p of particles) {
-      const x = p.x - camera.x;
-      const y = p.y - camera.y;
-
-      ctx.globalAlpha = Math.max(0, p.life / 35);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      const x = p.x - camera.x, y = p.y - camera.y;
+      const alpha = Math.max(0, p.life / 40);
+      if (p.smoke && images.darkSmoke && images.darkSmoke.ready) drawImageCentered(images.darkSmoke, x, y, p.size, p.size, false, alpha);
+      else { ctx.globalAlpha = alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x,y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
     }
+    ctx.save(); ctx.textAlign = "center"; ctx.font = "900 18px Arial";
+    for (const t of texts) { const x = t.x-camera.x, y = t.y-camera.y; ctx.globalAlpha = Math.max(0,t.life/62); ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.fillStyle = t.color; ctx.lineWidth = 4; ctx.strokeText(t.value,x,y); ctx.fillText(t.value,x,y); }
+    ctx.globalAlpha = 1; ctx.restore();
   }
 
-  function drawTexts() {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.font = "900 18px Arial";
-
-    for (const t of texts) {
-      const x = t.x - camera.x;
-      const y = t.y - camera.y;
-
-      ctx.globalAlpha = Math.max(0, t.life / 60);
-      ctx.strokeStyle = "rgba(0,0,0,0.65)";
-      ctx.fillStyle = "#ffffff";
-      ctx.lineWidth = 4;
-      ctx.strokeText(t.value, x, y);
-      ctx.fillText(t.value, x, y);
-    }
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
-  function drawFingerTarget() {
+  function drawTarget() {
     if (!fingerDown) return;
-
-    const x = target.x - camera.x;
-    const y = target.y - camera.y;
-
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 22 + Math.sin(Date.now() * 0.012) * 3, 0, Math.PI * 2);
-    ctx.stroke();
+    const x = target.x - camera.x, y = target.y - camera.y;
+    ctx.strokeStyle = "rgba(255,255,255,.48)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,22 + Math.sin(Date.now()*.012)*3,0,Math.PI*2); ctx.stroke();
   }
 
-  function update() {
-    updatePlayer();
-    updateEnemies();
-    updateTowers();
-    updateProjectiles();
-    updateDrops();
-    updateParticles();
-    updateTexts();
-    updateCamera();
-    updateHUD();
-  }
+  function update() { time++; updatePlayer(); updateEnemies(); updateTowers(); updateProjectiles(); updateDrops(); updateFx(); updateCamera(); updateHUD(); }
 
   function draw() {
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
+    ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+    beginWorld();
     drawBackground();
-
+    drawProps();
     const drawables = [
-      ...towers.map(o => ({ y: o.y, type: "tower", obj: o })),
-      { y: base.y, type: "base", obj: base },
-      ...drops.map(o => ({ y: o.y, type: "drop", obj: o })),
-      ...enemies.map(o => ({ y: o.y, type: "enemy", obj: o })),
-      { y: player.y, type: "player", obj: player }
-    ];
-
-    drawables.sort((a, b) => a.y - b.y);
-
+      ...towers.map(o => ({ y:o.y, type:"tower", obj:o })),
+      { y:base.y, type:"base", obj:base },
+      ...drops.map(o => ({ y:o.y, type:"drop", obj:o })),
+      ...enemies.map(o => ({ y:o.y, type:"enemy", obj:o })),
+      { y:player.y, type:"player", obj:player }
+    ].sort((a,b) => a.y-b.y);
     for (const d of drawables) {
       if (d.type === "tower") drawTower(d.obj);
       if (d.type === "base") drawBase();
@@ -894,64 +507,19 @@
       if (d.type === "enemy") drawEnemy(d.obj);
       if (d.type === "player") drawPlayer();
     }
-
     for (const p of projectiles) drawProjectile(p);
-
-    drawParticles();
-    drawTexts();
-    drawFingerTarget();
+    drawFx(); drawTarget();
+    endWorld();
   }
 
-  function loop() {
-    update();
-    draw();
-    requestAnimationFrame(loop);
-  }
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  function showEndCard() { endCard.style.display = "flex"; }
+  function hideEndCard() { if (base.hp <= 0) { base.hp = base.maxHp; enemies.length = 0; drops.length = 0; projectiles.length = 0; deathFx.length = 0; wave = 1; coins = Math.max(coins, 100); player.x = base.x; player.y = base.y + 210; target.x = player.x; target.y = player.y; } endCard.style.display = "none"; }
 
-  function showEndCard() {
-    endCard.style.display = "flex";
-  }
-
-  function hideEndCard() {
-    if (base.hp <= 0) {
-      base.hp = base.maxHp;
-      enemies.length = 0;
-      drops.length = 0;
-      projectiles.length = 0;
-      wave = 1;
-      coins = Math.max(coins, 80);
-      player.x = base.x;
-      player.y = base.y + 180;
-      target.x = player.x;
-      target.y = player.y;
-    }
-
-    endCard.style.display = "none";
-  }
-
-  canvas.addEventListener("pointerdown", function (event) {
-    fingerDown = true;
-    canvas.setPointerCapture(event.pointerId);
-    target = screenToWorld(event.clientX, event.clientY);
-  });
-
-  canvas.addEventListener("pointermove", function (event) {
-    if (!fingerDown) return;
-    target = screenToWorld(event.clientX, event.clientY);
-  });
-
-  canvas.addEventListener("pointerup", function () {
-    fingerDown = false;
-    target.x = player.x;
-    target.y = player.y;
-  });
-
-  canvas.addEventListener("pointercancel", function () {
-    fingerDown = false;
-    target.x = player.x;
-    target.y = player.y;
-  });
-
+  canvas.addEventListener("pointerdown", e => { fingerDown = true; canvas.setPointerCapture(e.pointerId); target = screenToWorld(e.clientX, e.clientY); });
+  canvas.addEventListener("pointermove", e => { if (fingerDown) target = screenToWorld(e.clientX, e.clientY); });
+  canvas.addEventListener("pointerup", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
+  canvas.addEventListener("pointercancel", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
   buildTowerBtn.addEventListener("click", tryBuildTower);
   upgradeBaseBtn.addEventListener("click", upgradeBase);
   waveBtn.addEventListener("click", spawnWave);
@@ -959,16 +527,7 @@
   continueBtn.addEventListener("click", hideEndCard);
   window.addEventListener("resize", resize);
 
-  resize();
-  loadAssets();
-  updateHUD();
-  spawnWave();
-
-  setInterval(function () {
-    if (endCard.style.display !== "flex") {
-      spawnEnemy();
-    }
-  }, 1800);
-
+  resize(); loadAssets(); updateHUD(); spawnWave();
+  setInterval(() => { if (endCard.style.display !== "flex") spawnEnemy(); }, 1700);
   loop();
 })();
