@@ -1,54 +1,18 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Vampire World - Pro HTML5 Playable</title>
-  <link rel="stylesheet" href="css/game.css">
-</head>
-<body>
-  <div id="gameWrap">
-    <canvas id="gameCanvas"></canvas>
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>Vampire World</title><link rel="stylesheet" href="css/game.css"></head><body>
+<div id="homeView" class="view active"><div class="homeBg"></div><div class="homeTopLeft">
+<button class="menuIconBtn" data-open-panel="settings"><img src="assets/ui/icon_settings.webp" alt=""><span data-i18n="menu_settings">Paramètres</span></button>
+<button class="menuIconBtn" data-open-panel="shop"><img src="assets/ui/icon_shop.webp" alt=""><span data-i18n="menu_shop">Boutique</span></button>
+<button class="menuIconBtn" data-open-panel="crosspromo"><img src="assets/ui/icon_crosspromo.webp" alt=""><span data-i18n="menu_crosspromo">Crosspromo</span></button>
+<button class="menuIconBtn" data-open-panel="profile"><img src="assets/ui/icon_profile.webp" alt=""><span data-i18n="menu_profile">Profil</span></button>
+<button class="menuIconBtn" data-open-panel="noads"><img src="assets/ui/icon_no_ads.webp" alt=""><span data-i18n="menu_noads">Sans pubs</span></button></div>
+<div class="homeCenter"><h1 class="homeTitle" data-i18n="home_title">Vampire Defense</h1><p class="homeSubtitle" data-i18n="home_subtitle">Défends ta base contre les créatures de la nuit.</p><button id="playHomeBtn" class="playHomeBtn" type="button"><img src="assets/ui/button_play_pale.webp" alt=""><span data-i18n="home_play">Jouer</span></button></div></div>
 
-    <div id="topHud">
-      <div class="hudPill">
-        <img class="hudIcon" src="assets/ui/icon_coin.webp" alt="" onerror="this.style.display='none'">
-        <span id="coinsText">0</span>
-      </div>
-      <div class="hudPill"><span class="heartIcon"></span><span id="baseText">Base 100%</span></div>
-    </div>
+<div id="gameView" class="view"><div id="gameWrap"><canvas id="gameCanvas"></canvas>
+<div id="topHud"><div class="hudPill"><img class="hudIcon" src="assets/ui/icon_coin.webp" alt=""><span id="coinsText">0</span></div><div class="hudPill"><span class="heartIcon"></span><span id="baseText">Base 100%</span></div></div>
+<button id="installBtn" type="button">INSTALLER</button><div id="bottomHud"><div id="hintBox"><strong>Vampire World</strong><span>Déplace ton doigt.</span></div><div id="actionPanel"><button id="buildTowerBtn" type="button"><img src="assets/ui/icon_build_tower.webp" alt=""><span>Tour</span><small>50</small></button><button id="upgradeBaseBtn" type="button"><img src="assets/ui/icon_upgrade_base.webp" alt=""><span>Base</span><small>100</small></button><button id="waveBtn" type="button"><span>Vague</span><small>Danger</small></button></div></div>
+<button id="contextUpgradeBtn" type="button"><img src="assets/ui/icon_arrow_up.webp" alt=""></button>
+<div id="endCard"><div class="endCardBox"><h1>Défends ta base</h1><p>Repousse les vampires.</p><button id="continueBtn" type="button">Continuer</button></div></div></div></div>
 
-    <button id="installBtn" type="button">INSTALLER</button>
-
-    <div id="bottomHud">
-      <div id="hintBox">
-        <strong>Vampire World</strong>
-        <span>Déplace ton doigt. Le héros suit en direct. Tue les vampires, récupère les pièces et construis des tours.</span>
-      </div>
-
-      <div id="actionPanel">
-        <button id="buildTowerBtn" type="button">
-          <img src="assets/ui/icon_build_tower.webp" alt="" onerror="this.style.display='none'">
-          <span>Tour</span><small>50</small>
-        </button>
-        <button id="upgradeBaseBtn" type="button">
-          <img src="assets/ui/icon_upgrade_base.webp" alt="" onerror="this.style.display='none'">
-          <span>Base</span><small>100</small>
-        </button>
-        <button id="waveBtn" type="button"><span>Vague</span><small>Danger</small></button>
-      </div>
-    </div>
-
-    <div id="endCard">
-      <div class="endCardBox">
-        <h1>Défends ta base</h1>
-        <p>Repousse les vampires, construis des tours et améliore ton camp avant la prochaine vague.</p>
-        <button id="continueBtn" type="button">Continuer</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/assets.js"></script>
-  <script src="js/game.js"></script>
-</body>
-</html>
+<div id="panelView" class="view"><div class="panelOverlay"></div><div class="panelCard"><div class="panelHead"><h2 id="panelTitle">Panel</h2><button id="closePanelBtn" type="button">×</button></div><div id="panelContent"></div></div></div>
+<script src="js/assets.js"></script><script src="js/data/balance.js"></script><script src="js/i18n.js"></script><script src="js/game.js"></script>
+</body></html>
