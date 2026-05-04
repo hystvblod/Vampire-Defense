@@ -83,7 +83,7 @@
 
   function loadAssets() {
     const A = window.VAMPIRE_ASSETS;
-    loadImage("map", A.map);
+    Object.keys(A.maps).forEach(k => loadImage(k, A.maps[k]));
     Object.keys(A.props).forEach(k => loadImage(k, A.props[k]));
     loadImage("playerIdle", A.player.idle);
     loadImage("playerDown", A.player.walkDown);
@@ -442,13 +442,32 @@
   function endWorld() { ctx.restore(); }
 
   function drawBackground() {
-    if (images.map && images.map.ready) ctx.drawImage(images.map, -camera.x, -camera.y, world.w, world.h);
-    else drawFallbackMap();
+    const worldDef = getCurrentWorld();
+    const mapKey = worldDef.mapAsset || "mapForest";
+    const mapImg = images[mapKey];
 
-    const sw = window.innerWidth, sh = window.innerHeight;
-    const g = ctx.createRadialGradient(sw / 2, sh / 2, 90, sw / 2, sh / 2, Math.max(sw, sh) * .75);
-    g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(1, "rgba(0,0,0,.55)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, sw, sh);
+    if (mapImg && mapImg.ready) {
+      ctx.drawImage(mapImg, -camera.x, -camera.y, world.w, world.h);
+    } else {
+      drawFallbackMap();
+    }
+
+    const sw = window.innerWidth;
+    const sh = window.innerHeight;
+    const g = ctx.createRadialGradient(
+      sw / 2,
+      sh / 2,
+      90,
+      sw / 2,
+      sh / 2,
+      Math.max(sw, sh) * 0.75
+    );
+
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(1, "rgba(0,0,0,.55)");
+
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, sw, sh);
   }
 
   function drawFallbackMap() {
