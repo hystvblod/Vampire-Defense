@@ -48,3 +48,25 @@ button:active { transform: translateY(1px) scale(.98); }
 .endCardBox { width: min(88vw, 380px); padding: 22px; border-radius: 28px; text-align: center; background: rgba(11,11,18,.92); border: 1px solid rgba(255,255,255,.16); box-shadow: 0 30px 74px rgba(0,0,0,.55); }
 .endCardBox h1 { margin: 0 0 8px; font-size: 24px; } .endCardBox p { margin: 0 0 16px; color: rgba(255,255,255,.82); font-size: 14px; line-height: 1.35; }
 @media (max-width: 430px) { #hintBox { display: none; } #actionPanel button { min-width: 58px; padding: 8px 9px; } }
+
+.view { position: fixed; inset: 0; display: none; }
+.view.active { display: block; }
+#homeView { background: radial-gradient(circle at 50% 30%, rgba(116,55,180,0.35), transparent 40%), linear-gradient(180deg, #090b14 0%, #0d1020 100%); overflow: hidden; }
+.homeBg { position: absolute; inset: 0; background: radial-gradient(circle at 70% 20%, rgba(170,90,255,0.14), transparent 24%), radial-gradient(circle at 20% 70%, rgba(120,70,200,0.12), transparent 28%); pointer-events: none; }
+.homeTopLeft { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 14px; display: flex; flex-direction: column; gap: 10px; z-index: 20; }
+.menuIconBtn { display:flex; align-items:center; gap:10px; min-height:52px; min-width:160px; padding:10px 14px; border-radius:18px; background:rgba(16,18,31,.82); border:1px solid rgba(255,255,255,.12); color:#fff; font-weight:900; box-shadow:0 16px 36px rgba(0,0,0,.35); backdrop-filter:blur(10px); }
+.menuIconBtn img { width:26px; height:26px; object-fit:contain; }
+.homeCenter { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:20px; text-align:center; }
+.homeTitle { margin:0; font-size:clamp(28px,5vw,48px); font-weight:1000; }
+.homeSubtitle { margin:0; max-width:560px; color:rgba(255,255,255,.84); font-size:clamp(14px,2.8vw,18px); line-height:1.4; }
+.playHomeBtn { border:0; background:transparent; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.playHomeBtn img { width:min(240px,58vw); height:auto; display:block; }
+.playHomeBtn span { font-size:20px; font-weight:1000; color:#fff; text-shadow:0 4px 18px rgba(0,0,0,.5); }
+#panelView { background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); }
+.panelOverlay { position:absolute; inset:0; }
+.panelCard { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(92vw,760px); max-height:84vh; overflow:auto; border-radius:28px; background:rgba(14,16,28,.96); border:1px solid rgba(255,255,255,.14); box-shadow:0 28px 80px rgba(0,0,0,.5); padding:20px; }
+.panelHead { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+#closePanelBtn { border:0; width:42px; height:42px; border-radius:50%; background:linear-gradient(180deg,#6b2de8,#431090); color:white; font-size:20px; font-weight:900; }
+#contextUpgradeBtn { position:fixed; right:16px; bottom:110px; z-index:25; width:68px; height:68px; border:0; border-radius:50%; display:none; align-items:center; justify-content:center; background:linear-gradient(180deg,#ffd86a,#c67a17); box-shadow:0 16px 32px rgba(0,0,0,.35); }
+#contextUpgradeBtn img { width:32px; height:32px; }
+@media (max-width: 640px) { .homeTopLeft { left:10px; right:10px; gap:8px; } .menuIconBtn { min-width:0; width:100%; justify-content:flex-start; min-height:48px; border-radius:16px; padding:10px 12px; font-size:14px; } .panelCard { width:calc(100vw - 16px); padding:16px; border-radius:20px; } }

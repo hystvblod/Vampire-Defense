@@ -52,6 +52,14 @@ window.VAMPIRE_ASSETS = {
     iconCoin: "assets/ui/icon_coin.webp",
     iconBuildTower: "assets/ui/icon_build_tower.webp",
     iconUpgradeBase: "assets/ui/icon_upgrade_base.webp",
-    buttonMain: "assets/ui/button_main.webp"
+    buttonMain: "assets/ui/button_main.webp",
+    buttonPlayPale: "assets/ui/button_play_pale.webp",
+    iconSettings: "assets/ui/icon_settings.webp",
+    iconShop: "assets/ui/icon_shop.webp",
+    iconCrosspromo: "assets/ui/icon_crosspromo.webp",
+    iconProfile: "assets/ui/icon_profile.webp",
+    iconNoAds: "assets/ui/icon_no_ads.webp",
+    iconArrowUp: "assets/ui/icon_arrow_up.webp",
+    panelCard: "assets/ui/panel_card.webp"
   }
 };
