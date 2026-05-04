@@ -12,6 +12,15 @@
   const waveBtn = document.getElementById("waveBtn");
   const installBtn = document.getElementById("installBtn");
   const continueBtn = document.getElementById("continueBtn");
+  const homeView = document.getElementById("homeView");
+  const gameView = document.getElementById("gameView");
+  const panelView = document.getElementById("panelView");
+  const panelTitle = document.getElementById("panelTitle");
+  const panelContent = document.getElementById("panelContent");
+  const closePanelBtn = document.getElementById("closePanelBtn");
+  const playHomeBtn = document.getElementById("playHomeBtn");
+  const contextUpgradeBtn = document.getElementById("contextUpgradeBtn");
+  let currentUpgradeTarget = null;
 
   const DPR = Math.min(2, window.devicePixelRatio || 1);
   const world = { w: 3000, h: 3000 };
@@ -34,8 +43,7 @@
 
   let target = { x: player.x, y: player.y };
   let fingerDown = false;
-  let coins = 100;
-  let wave = 1;
+  const state = { screen:"home", coins:120, wave:1, currentUniverseId:"forest", unlockedTowers:{crossbow:true,fire:true,holy:true,garlic:false}, fragments:0, noAds:false, playerHp:120, playerMaxHp:120, superTowerUntil:0 };
   let time = 0;
 
   const images = {};
@@ -119,7 +127,7 @@
   }
 
   function updateHUD() {
-    coinsText.textContent = coins;
+    coinsText.textContent = state.coins;
     baseText.textContent = "Base " + Math.max(0, Math.round((base.hp / base.maxHp) * 100)) + "%";
   }
 
@@ -148,9 +156,9 @@
   }
 
   function spawnWave() {
-    addText(base.x, base.y - 135, "Vague " + wave, "#ffd84b");
-    for (let i = 0; i < 10 + wave * 2; i++) setTimeout(spawnEnemy, i * 105);
-    wave++;
+    addText(base.x, base.y - 135, "Vague " + state.wave, "#ffd84b");
+    for (let i = 0; i < 6 + state.wave * 2; i++) setTimeout(spawnEnemy, i * 105);
+    state.wave++;
   }
 
   function killEnemy(enemy, index) {
@@ -164,13 +172,13 @@
   }
 
   function tryBuildTower() {
-    if (coins < 50) { addText(player.x, player.y - 45, "Pas assez", "#ff7084"); return; }
+    if (state.coins < GAME_BALANCE.economy.buildTowerCost) { addText(player.x, player.y - 45, "Pas assez", "#ff7084"); return; }
     if (Math.hypot(player.x - base.x, player.y - base.y) < 140) { addText(player.x, player.y - 45, "Trop près", "#ff7084"); return; }
     for (const t of towers) if (Math.hypot(t.x - player.x, t.y - player.y) < 96) { addText(player.x, player.y - 45, "Déjà une tour", "#ff7084"); return; }
 
     const count = towers.length % 3;
     const type = count === 0 ? "crossbow" : count === 1 ? "fire" : "holy";
-    coins -= 50;
+    state.coins -= GAME_BALANCE.economy.buildTowerCost;
     towers.push({ x: player.x, y: player.y, type, range: type === "holy" ? 230 : 275, cooldown: 0, dmg: type === "fire" ? 30 : type === "holy" ? 18 : 24, level: type === "crossbow" && towers.length > 2 ? 2 : 1, anim: 0 });
     addParticles(player.x, player.y, 24, "#ffd84b", false);
     addText(player.x, player.y - 48, type === "fire" ? "Tour feu" : type === "holy" ? "Tour sacrée" : "Arbalète", "#fff");
@@ -178,8 +186,8 @@
   }
 
   function upgradeBase() {
-    if (coins < 100) { addText(base.x, base.y - 125, "Pas assez", "#ff7084"); return; }
-    coins -= 100;
+    if (state.coins < GAME_BALANCE.economy.baseUpgradeCosts[base.level+1]) { addText(base.x, base.y - 125, "Pas assez", "#ff7084"); return; }
+    state.coins -= GAME_BALANCE.economy.baseUpgradeCosts[base.level+1] || 0;
     base.level = Math.min(3, base.level + 1);
     base.maxHp += 45;
     base.hp = base.maxHp;
@@ -305,7 +313,7 @@
       if (d < 150) c.magnet = true;
       if (c.magnet) { c.x += (player.x - c.x) * .09; c.y += (player.y - c.y) * .09; }
       if (d < player.r + 16) {
-        coins += c.value;
+        state.coins += c.value;
         addParticles(c.x, c.y, 10, "#ffd84b", false);
         drops.splice(i, 1);
         updateHUD();
@@ -521,13 +529,32 @@
   canvas.addEventListener("pointerup", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
   canvas.addEventListener("pointercancel", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
   buildTowerBtn.addEventListener("click", tryBuildTower);
+  if (playHomeBtn) playHomeBtn.addEventListener("click", () => showView("game"));
+  if (closePanelBtn) closePanelBtn.addEventListener("click", () => showView("home"));
+  document.querySelectorAll("[data-open-panel]").forEach(btn => btn.addEventListener("click", () => openPanel(btn.getAttribute("data-open-panel"))));
   upgradeBaseBtn.addEventListener("click", upgradeBase);
   waveBtn.addEventListener("click", spawnWave);
   installBtn.addEventListener("click", showEndCard);
   continueBtn.addEventListener("click", hideEndCard);
   window.addEventListener("resize", resize);
 
-  resize(); loadAssets(); updateHUD(); spawnWave();
+  resize(); loadAssets(); updateHUD(); spawnWave(); showView("home"); I18N.apply();
   setInterval(() => { if (endCard.style.display !== "flex") spawnEnemy(); }, 1700);
   loop();
+
+
+  function showView(name) {
+    if (!homeView || !gameView || !panelView) return;
+    homeView.classList.remove("active"); gameView.classList.remove("active"); panelView.classList.remove("active");
+    if (name === "home") homeView.classList.add("active");
+    if (name === "game") gameView.classList.add("active");
+    if (name === "panel") panelView.classList.add("active");
+    state.screen = name;
+  }
+
+  function renderShopHtml() {
+    return `<div class="shopGrid">${window.GAME_BALANCE.shop.map(item => `<div class="fakeCard"><h3>${I18N.t(item.labelKey)}</h3><p>Type : ${item.type}</p><p>${item.priceCoins > 0 ? `Prix : ${item.priceCoins}` : "Achat premium"}</p><button type="button">${item.enabled ? "Voir" : "Bientôt"}</button></div>`).join("")}</div>`;
+  }
+  function openPanel(panel) { showView("panel"); if (panel === "settings") { panelTitle.textContent = I18N.t("panel_settings"); panelContent.innerHTML = `<div class="fakeCard">${I18N.t("placeholder_settings")}</div>`; } if (panel === "shop") { panelTitle.textContent = I18N.t("panel_shop"); panelContent.innerHTML = renderShopHtml(); } if (panel === "crosspromo") { panelTitle.textContent = I18N.t("panel_crosspromo"); panelContent.innerHTML = `<div class="fakeCard">${I18N.t("placeholder_crosspromo")}</div>`; } if (panel === "profile") { panelTitle.textContent = I18N.t("panel_profile"); panelContent.innerHTML = `<div class="fakeCard"><strong>${I18N.t("panel_profile")}</strong><br>Pièces : ${state.coins}<br>Fragments : ${state.fragments}<br>Vague actuelle : ${state.wave}</div>`; } if (panel === "noads") { panelTitle.textContent = I18N.t("panel_noads"); panelContent.innerHTML = `<div class="fakeCard">${I18N.t("placeholder_noads")}</div>`; } }
+
 })();
