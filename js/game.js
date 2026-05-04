@@ -43,7 +43,7 @@
 
   let target = { x: player.x, y: player.y };
   let fingerDown = false;
-  const state = { screen:"home", coins:120, wave:1, currentUniverseId:"forest", unlockedTowers:{crossbow:true,fire:true,holy:true,garlic:false}, fragments:0, noAds:false, playerHp:120, playerMaxHp:120, superTowerUntil:0 };
+  const state = { screen: "home", hasStarted: false, coins: GAME_BALANCE.economy.startCoins, wave: 1, currentUniverseId: "forest", unlockedTowers: { crossbow: true, fire: true, holy: true, garlic: false }, fragments: 0, noAds: false, playerHp: 120, playerMaxHp: 120, superTowerUntil: 0 };
   let time = 0;
 
   const images = {};
@@ -141,23 +141,98 @@
     }
   }
 
-  function spawnEnemy() {
+  function getCurrentWorld() {
+    return GAME_BALANCE.worlds.find(worldDef => {
+      return state.wave >= worldDef.waveStart && state.wave <= worldDef.waveEnd;
+    }) || GAME_BALANCE.worlds[0];
+  }
+
+  function getTowerStartLevelForCurrentWorld() {
+    const worldDef = getCurrentWorld();
+    return worldDef.towerStartLevel || 1;
+  }
+
+  function getTowerMaxLevelForCurrentWorld() {
+    const worldDef = getCurrentWorld();
+    return worldDef.towerMaxLevel || 12;
+  }
+
+  function buildWaveEnemies() {
+    const worldDef = getCurrentWorld();
+    const isBossWave = state.wave % GAME_BALANCE.progression.bossEvery === 0;
+    const list = [];
+
+    const baseCount = 6 + Math.floor(state.wave * 1.35);
+
+    for (let i = 0; i < baseCount; i++) {
+      const enemyId = worldDef.enemies[i % worldDef.enemies.length];
+      list.push(enemyId);
+    }
+
+    if (isBossWave) {
+      list.push(worldDef.boss);
+    }
+
+    return list;
+  }
+
+  function spawnEnemyById(enemyId) {
+    const def = GAME_BALANCE.enemies[enemyId];
+    if (!def) return;
+
     const side = Math.floor(Math.random() * 4);
-    let x = 0, y = 0;
+    let x = 0;
+    let y = 0;
+
     if (side === 0) { x = Math.random() * world.w; y = -110; }
     if (side === 1) { x = world.w + 110; y = Math.random() * world.h; }
     if (side === 2) { x = Math.random() * world.w; y = world.h + 110; }
     if (side === 3) { x = -110; y = Math.random() * world.h; }
 
-    const roll = Math.random();
-    const kind = roll < 0.18 ? "tank" : roll > 0.72 ? "fast" : "basic";
-    const hp = kind === "tank" ? 92 + wave * 9 : kind === "fast" ? 34 + wave * 5 : 52 + wave * 6;
-    enemies.push({ x, y, r: kind === "tank" ? 27 : kind === "fast" ? 17 : 21, hp, maxHp: hp, speed: kind === "tank" ? .78 : kind === "fast" ? 1.72 : 1.12, dmg: kind === "tank" ? .34 : kind === "fast" ? .18 : .24, kind, anim: Math.random() * 10, hit: 0, attacking: 0, slow: 0 });
+    const worldDef = getCurrentWorld();
+    const wavePower = Math.max(0, state.wave - worldDef.waveStart);
+
+    const hp = Math.round(def.hp + wavePower * def.hpGrowth);
+    const dmg = def.damage + wavePower * def.damageGrowth;
+
+    enemies.push({
+      id: enemyId,
+      x,
+      y,
+      r: def.radius,
+      hp,
+      maxHp: hp,
+      speed: def.speed,
+      dmg,
+      reward: def.reward,
+      attackRange: def.attackRange,
+      assetWalk: def.assetWalk,
+      assetAttack: def.assetAttack,
+      assetDeath: def.assetDeath,
+      kind: def.kind,
+      anim: Math.random() * 10,
+      hit: 0,
+      attacking: 0,
+      slow: 0
+    });
   }
 
   function spawnWave() {
-    addText(base.x, base.y - 135, "Vague " + state.wave, "#ffd84b");
-    for (let i = 0; i < 6 + state.wave * 2; i++) setTimeout(spawnEnemy, i * 105);
+    const currentWorld = getCurrentWorld();
+    const pack = buildWaveEnemies();
+    const waveLabel = I18N.t("hud_wave", "Vague") + " " + state.wave;
+
+    addText(base.x, base.y - 135, waveLabel, "#ffd84b");
+    addText(base.x, base.y - 160, I18N.t(currentWorld.titleKey, currentWorld.id), "#ffffff");
+
+    pack.forEach((enemyId, index) => {
+      setTimeout(() => {
+        if (state.screen === "game" && base.hp > 0) {
+          spawnEnemyById(enemyId);
+        }
+      }, index * 520);
+    });
+
     state.wave++;
   }
 
@@ -529,7 +604,14 @@
   canvas.addEventListener("pointerup", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
   canvas.addEventListener("pointercancel", () => { fingerDown = false; target.x = player.x; target.y = player.y; });
   buildTowerBtn.addEventListener("click", tryBuildTower);
-  if (playHomeBtn) playHomeBtn.addEventListener("click", () => showView("game"));
+  playHomeBtn.addEventListener("click", () => {
+    showView("game");
+
+    if (!state.hasStarted) {
+      state.hasStarted = true;
+      spawnWave();
+    }
+  });
   if (closePanelBtn) closePanelBtn.addEventListener("click", () => showView("home"));
   document.querySelectorAll("[data-open-panel]").forEach(btn => btn.addEventListener("click", () => openPanel(btn.getAttribute("data-open-panel"))));
   upgradeBaseBtn.addEventListener("click", upgradeBase);
@@ -538,8 +620,11 @@
   continueBtn.addEventListener("click", hideEndCard);
   window.addEventListener("resize", resize);
 
-  resize(); loadAssets(); updateHUD(); spawnWave(); showView("home"); I18N.apply();
-  setInterval(() => { if (endCard.style.display !== "flex") spawnEnemy(); }, 1700);
+  resize();
+  loadAssets();
+  updateHUD();
+  showView("home");
+  I18N.apply();
   loop();
 
 
